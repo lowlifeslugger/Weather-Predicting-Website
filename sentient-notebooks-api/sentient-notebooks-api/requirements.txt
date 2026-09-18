@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+bcrypt
+pydantic-settings
+python-multipart
+email-validator
+sentence-transformers
+chromadb
+pypdf
+groq
+ollama
+boto3
+ddgs
+trafilatura
