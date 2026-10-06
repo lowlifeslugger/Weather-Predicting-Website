@@ -1,0 +1,88 @@
+BACKTEST REPORT - how good are the forecasts, really?
+Built       : 2026-10-06 12:43
+Model       : ecmwf_ifs025 (past forecasts from Open-Meteo Previous Runs)
+Truth       : ERA5 daily rainfall at each sample point's grid cell
+Period      : years [2025], months [4, 5, 6, 7, 8]
+Samples     : 135696 state-days x leads; trained on dates before 2025-07-17; tested from 2025-07-17 (only one year available)
+Day window  : calendar day (local time)
+
+!! WARNING: ERA5 'truth' is itself a model product (the same family as the forecast).
+!! Scores below are optimistic and say little about real-world accuracy. Use IMD truth
+!! for anything you present as an accuracy claim.
+
+How to read it
+  Event      = at least one of the state's sample points has an observed cell >= threshold.
+  Forecast x = wettest forecast among those same points at that lead time.
+  BSS        = Brier skill score vs. always predicting the long-run base rate.
+               >= 0.10 useful | 0.02-0.10 marginal | below 0.02 no skill. (1.0 = perfect)
+  POD / FAR / CSI = hit rate / false-alarm ratio / critical success index.
+  'det'  = plain yes/no: forecast >= threshold.  'cal>=50%' = calibrated chance >= 50%.
+  'persist' = same as yesterday (the baseline a forecast must beat).
+  Events with fewer than 30 cases in the test period are marked 'too few events'.
+
+NOT COVERED: storms/gusts. IMD publishes no gridded gust or thunderstorm observations, so
+there is nothing to score them against. predict.py shows them as raw and UNVERIFIED.
+====================================================================================================
+
+EVENT 'rain': observed rain >= 2.5 mm in 24 h at any sample point of the state
+lead  n_test events  base    BSS  verdict         det POD   FAR   CSI  cal50 POD   FAR   CSI  persist CSI
+---------------------------------------------------------------------------------------------------------
+  1d    4606   1838   40%  0.62  useful              86%   17%   73%        84%   15%   73%          59%
+  2d    4606   1838   40%  0.56  useful              84%   20%   70%        81%   18%   69%          59%
+  3d    4606   1838   40%  0.54  useful              82%   21%   67%        79%   18%   67%          59%
+  5d    4606   1838   40%  0.47  useful              80%   24%   63%        76%   22%   63%          59%
+
+  Reliability (does a stated 30% happen ~30% of the time?)  [test period]
+   1d: | 2%->2%(n=1690) | 14%->11%(n=479) | 25%->27%(n=305) | 35%->35%(n=165) | 45%->40%(n=158) | 54%->57%(n=134) | 65%->61%(n=189) | 75%->80%(n=240) | 84%->84%(n=332) | 96%->95%(n=914)
+   2d: | 2%->2%(n=1572) | 14%->13%(n=504) | 24%->22%(n=290) | 36%->40%(n=239) | 44%->39%(n=178) | 54%->60%(n=177) | 64%->57%(n=177) | 74%->73%(n=344) | 85%->86%(n=313) | 95%->94%(n=812)
+   3d: | 3%->2%(n=1566) | 14%->13%(n=435) | 24%->22%(n=318) | 35%->38%(n=275) | 44%->45%(n=240) | 53%->51%(n=149) | 63%->62%(n=228) | 74%->78%(n=359) | 83%->83%(n=302) | 96%->94%(n=734)
+   5d: | 3%->4%(n=1371) | 14%->13%(n=514) | 24%->26%(n=240) | 33%->31%(n=472) | 44%->44%(n=213) | 54%->54%(n=246) | 64%->63%(n=189) | 74%->74%(n=424) | 85%->85%(n=371) | 95%->92%(n=566)
+
+EVENT 'moderate': observed rain >= 15.6 mm in 24 h at any sample point of the state
+lead  n_test events  base    BSS  verdict         det POD   FAR   CSI  cal50 POD   FAR   CSI  persist CSI
+---------------------------------------------------------------------------------------------------------
+  1d    4606    601   13%  0.47  useful              65%   33%   49%        61%   29%   49%          36%
+  2d    4606    601   13%  0.40  useful              65%   39%   46%        51%   32%   41%          36%
+  3d    4606    601   13%  0.36  useful              62%   43%   43%        53%   38%   40%          36%
+  5d    4606    601   13%  0.31  useful              59%   46%   39%        48%   38%   37%          36%
+
+  Reliability (does a stated 30% happen ~30% of the time?)  [test period]
+   1d: | 1%->1%(n=3361) | 13%->14%(n=320) | 24%->28%(n=170) | 35%->30%(n=140) | 46%->36%(n=98) | 54%->50%(n=142) | 65%->64%(n=65) | 74%->70%(n=99) | 83%->85%(n=91) | 95%->89%(n=120)
+   2d: | 1%->1%(n=3280) | 14%->20%(n=325) | 25%->21%(n=248) | 35%->39%(n=156) | 44%->42%(n=150) | 53%->55%(n=45) | 63%->55%(n=134) | 75%->66%(n=74) | 82%->73%(n=83) | 93%->86%(n=111)
+   3d: | 1%->2%(n=3219) | 14%->16%(n=377) | 24%->21%(n=273) | 35%->39%(n=147) | 44%->40%(n=76) | 54%->47%(n=153) | 65%->61%(n=121) | 72%->69%(n=85) | 82%->75%(n=87) | 96%->73%(n=68)
+   5d: | 2%->2%(n=3116) | 14%->17%(n=401) | 24%->22%(n=284) | 34%->28%(n=262) | 44%->34%(n=82) | 52%->55%(n=206) | 66%->61%(n=36) | 74%->53%(n=58) | 84%->80%(n=115) | 94%->60%(n=46)
+
+EVENT 'local': observed rain >= 35.0 mm in 24 h at any sample point of the state
+lead  n_test events  base    BSS  verdict         det POD   FAR   CSI  cal50 POD   FAR   CSI  persist CSI
+---------------------------------------------------------------------------------------------------------
+  1d    4606    172    4%  0.33  useful              48%   47%   33%        39%   40%   31%          19%
+  2d    4606    172    4%  0.29  useful              45%   45%   33%        32%   39%   27%          19%
+  3d    4606    172    4%  0.21  useful              38%   60%   24%        22%   46%   18%          19%
+  5d    4606    172    4%  0.16  useful              35%   64%   22%        16%   58%   13%          19%
+
+  Reliability (does a stated 30% happen ~30% of the time?)  [test period]
+   1d: | 1%->0%(n=4149) | 13%->14%(n=167) | 24%->27%(n=125) | 35%->29%(n=24) | 43%->44%(n=29) | 57%->53%(n=54) | 99%->78%(n=28)
+   2d: | 1%->0%(n=4135) | 13%->5%(n=137) | 24%->27%(n=213) | 51%->54%(n=42)
+   3d: | 1%->1%(n=4080) | 13%->14%(n=225) | 23%->19%(n=151) | 42%->40%(n=69) | 53%->54%(n=22)
+   5d: | 1%->1%(n=4058) | 13%->14%(n=243) | 23%->26%(n=173) | 33%->29%(n=54) | 51%->35%(n=39) | 74%->47%(n=21)
+
+EVENT 'heavy': observed rain >= 64.5 mm in 24 h at any sample point of the state
+lead  n_test events  base    BSS  verdict         det POD   FAR   CSI  cal50 POD   FAR   CSI  persist CSI
+---------------------------------------------------------------------------------------------------------
+  1d    4606     34    1%  0.22  useful              35%   54%   25%        29%   33%   26%           6%
+  2d    4606     34    1%  0.12  useful              26%   69%   17%        15%   58%   12%           6%
+  3d    4606     34    1%  0.09  marginal            21%   78%   12%         9%   70%    7%           6%
+  5d    4606     34    1%  0.09  marginal            21%   77%   12%         3%   50%    3%           6%
+
+  Reliability (does a stated 30% happen ~30% of the time?)  [test period]
+   1d: | 1%->0%(n=4549) | 16%->20%(n=20)
+   2d: | 1%->0%(n=4551) | 16%->15%(n=20)
+   3d: | 1%->0%(n=4526) | 15%->10%(n=48)
+   5d: | 1%->0%(n=4538) | 12%->6%(n=29) | 23%->21%(n=28)
+
+====================================================================================================
+Honest summary
+  Useful   : heavy@1d, heavy@2d, local@1d, local@2d, local@3d, local@5d, moderate@1d, moderate@2d, moderate@3d, moderate@5d, rain@1d, rain@2d, rain@3d, rain@5d
+  Weak/none: heavy@3d, heavy@5d
+  Scores are only as good as the truth data; point-sampled 'anywhere in state' events are
+  a proxy, not IMD's official district warnings.
