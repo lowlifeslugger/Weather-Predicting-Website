@@ -29,6 +29,8 @@ Repository to show the creation of a weather prediction website built during and
 
 **python world.py serve**
 
+**bare minimum just install the 5 python files and run the 4 commands above this, any errors will just be resolved later*
+
 
 **Contact
 
