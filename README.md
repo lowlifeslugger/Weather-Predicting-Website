@@ -22,10 +22,15 @@ Repository to show the creation of a weather prediction website built during and
    cd Weather-Predicting-Website
 
 **pip install pandas numpy xarray netcdf4 requests**
+
 **python world.py download**
+
 **python world.py backtest**
+
 **python world.py serve**
 
+
 **Contact
+
 For questions or inquiries, reach out at: milburnfernandes7@gmail.com**
 
