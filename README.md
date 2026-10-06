@@ -5,7 +5,9 @@ install all of these files in a dedicated folder and then in that terminal point
 to said folder, 
 
 py world.py download
+
 py world.py backtest
+
 py world.py serve
 
 good luck
