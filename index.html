@@ -206,6 +206,23 @@
     .paneltoggle { right: 12px; bottom: 12px; }
     .legend { display: none; }
   }
+  /* day / night */
+  .dn { left: 50%; top: 12px; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; padding: .4rem .8rem;
+        background: var(--panel); border: 2px solid var(--yellow); box-shadow: 4px 4px 0 var(--pink); font-size: .82rem; max-width: 520px; }
+  .dn[hidden] { display: none; }
+  .dn .chip { padding: .2rem .6rem; font-size: .78rem; }
+  .dn input[type="range"] { width: 150px; accent-color: var(--pink); padding: 0; }
+  #dnTime { font-family: var(--font-mono); color: var(--yellow); min-width: 9.5rem; } #dnSun { font-family: var(--font-mono); color: var(--muted); font-size: .75rem; }
+  .dnlights { mix-blend-mode: screen; }
+  .dnlights .fl { animation: dnflash 2.4s ease-in-out infinite alternate; }
+  @keyframes dnflash { 0% { opacity: .35; } 35% { opacity: 1; } 55% { opacity: .55; } 100% { opacity: .95; } }
+  @media (prefers-reduced-motion: reduce) { .dnlights .fl { animation: none; } }
+  @media (max-width: 1250px) { .dn { left: 16px; top: 74px; transform: none; max-width: calc(100vw - 32px); } }
+  .state:not(.sub):not(.hot):not(.sel):not(:hover) { stroke-opacity: .8; }
+  .x-closed { display: none !important; }
+  #dock { position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 35; display: flex; flex-direction: column; gap: .3rem; }
+  #dock .chip { background: var(--panel); font-family: var(--font-display); font-size: .6rem; letter-spacing: .04em; padding: .4rem .55rem; border-left: 0; text-align: left; width: 4.6rem; }
+  #dock .chip[aria-pressed="true"] { background: var(--cyan); }
 </style>
 </head>
 <body>
@@ -244,6 +261,16 @@
   <span><i style="background:var(--high)"></i>High</span>
   <span><i style="background:var(--veryhigh)"></i>Very high</span>
 </div>
+
+<div class="hud dn" id="dn">
+  <button class="chip" id="dnToggle" type="button" aria-pressed="true">Night: on</button>
+  <span id="dnTime">UTC</span>
+  <input type="range" id="dnSlide" min="-720" max="720" step="15" value="0" aria-label="Shift the time of day, in minutes">
+  <button class="chip" id="dnLive" type="button">Live</button>
+  <span id="dnSun"></span>
+</div>
+
+<nav id="dock" aria-label="Show or hide panels"></nav>
 
 <button class="hud paneltoggle" id="panelToggle" type="button" aria-expanded="true">Hide panel</button>
 
@@ -327,7 +354,7 @@
   function fitCam() {
     readSize();
     var pw = panelWidth(), fw = VW - pw;
-    k0 = Math.min(fw * 0.97 / map.w, VH * 0.9 / map.h);
+    k0 = Math.min(fw * 0.99 / map.w, VH * 0.95 / map.h);
     kMax = k0 * (map.layers && map.layers.length ? 70 : 24);
     cam.k = k0; cam.cx = map.w / 2 + pw / (2 * k0); cam.cy = map.h / 2;
   }
@@ -344,6 +371,7 @@
     Object.keys(markers).forEach(function (id) { markers[id].setAttribute("r", px(markers[id].dataset.r || 5)); });
     [].forEach.call(gDots.childNodes, function (c) { c.setAttribute("r", px(3.6)); });
     [].forEach.call(gPin.childNodes, function (c) { c.setAttribute("r", px(c.getAttribute("class") === "pinring" ? 11 : 3.4)); });
+    if (DN.ready) DN.rescale();
     var z = cam.k / k0;
     document.body.classList.toggle("zoomed", z > 1.6);
     layers.forEach(function (L) {
@@ -397,8 +425,18 @@
     Object.keys(attrs).forEach(function (k) { el.setAttribute(k, attrs[k]); });
     return el;
   }
-  function toXY(lat, lon) { var p = map.proj; return [(lon - p.lon0) * p.s, (p.lat1 - lat) * p.s]; }
-  function toLatLon(x, y) { var p = map.proj; return [p.lat1 - y / p.s, x / p.s + p.lon0]; }
+  function toXY(lat, lon) {
+    var p = map.proj;
+    if (p.type !== "miller") return [(lon - p.lon0) * p.s, (p.lat1 - lat) * p.s];
+    var la = Math.max(-89.9, Math.min(89.9, lat)) * Math.PI / 180;
+    return [(lon - p.lon0) * Math.PI / 180 * p.s, (p.yTop - 1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * la))) * p.s];
+  }
+  function toLatLon(x, y) {
+    var p = map.proj;
+    if (p.type !== "miller") return [p.lat1 - y / p.s, x / p.s + p.lon0];
+    var ym = p.yTop - y / p.s;
+    return [(2.5 * Math.atan(Math.exp(0.8 * ym)) - 0.625 * Math.PI) * 180 / Math.PI, x / p.s * 180 / Math.PI + p.lon0];
+  }
   function spotText(lat, lon) {
     return Math.abs(lat).toFixed(2) + "\u00b0" + (lat >= 0 ? "N" : "S") + " " + Math.abs(lon).toFixed(2) + "\u00b0" + (lon >= 0 ? "E" : "W");
   }
@@ -431,6 +469,7 @@
     svg.setAttribute("role", "group");
     svg.setAttribute("aria-label", "World map. Use the search box or list for keyboard access.");
     var gS = mk("g", {}), gM = mk("g", {}); gDots = mk("g", {}); gPin = mk("g", {});
+    if (map.proj) svg.appendChild(mk("rect", { x: 0, y: 0, width: map.w, height: map.h, fill: "#12033a", "pointer-events": "none" }));
     map.states.forEach(function (s) { addShape(gS, s, {}, gM); });
     svg.appendChild(gS); svg.appendChild(gM);
     (map.layers || []).forEach(function (L) {
@@ -439,6 +478,7 @@
       g.appendChild(gm); g.style.display = "none"; svg.appendChild(g);
       layers.push({ parent: L.parent, label: L.label, minZoom: L.minZoom, g: g, on: false, ids: L.states.map(function (s) { return s.id; }) });
     });
+    DN.init();
     svg.appendChild(gDots); svg.appendChild(gPin);
     stage.appendChild(svg);
     fitCam(); applyView();
@@ -510,6 +550,107 @@
     } catch (err) { /* not supported: fine */ }
     return null;
   }
+
+
+  /* ====================== day / night + city lights ====================== */
+  var DN = {
+    ready: false, on: true, off: 0, cities: [], img: null, sun: null, cv: null, last: 0,
+    sunPos: function (t) {
+      var r = Math.PI / 180, n = t / 86400000 + 2440587.5 - 2451545.0;
+      var L = 280.460 + 0.9856474 * n, g = (357.528 + 0.9856003 * n) * r;
+      var lam = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * r, eps = (23.439 - 4e-7 * n) * r;
+      var ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)) / r;
+      var lon = ra - (280.46061837 + 360.98564736629 * n); lon = ((lon % 360) + 540) % 360 - 180;
+      return { dec: Math.asin(Math.sin(eps) * Math.sin(lam)), lon: lon };
+    },
+    alt: function (s, lat, lon) {                       // sun altitude in degrees
+      var r = Math.PI / 180, p = lat * r;
+      return Math.asin(Math.sin(p) * Math.sin(s.dec) + Math.cos(p) * Math.cos(s.dec) * Math.cos((lon - s.lon) * r)) / r;
+    },
+    init: function () {
+      if (!map.proj || DN.ready) { if (!map.proj) $("#dn").hidden = true; return; }
+      var defs = mk("defs", {});
+      [["dnN", "#ffd27a", "#ff8a1f"], ["dnD", "#fffbe0", "#ffe600"]].forEach(function (g) {
+        var rg = mk("radialGradient", { id: g[0] });
+        [[0, g[1], 1], [.35, g[2], .55], [1, g[2], 0]].forEach(function (s) { rg.appendChild(mk("stop", { offset: s[0], "stop-color": s[1], "stop-opacity": s[2] })); });
+        defs.appendChild(rg);
+      });
+      svg.appendChild(defs);
+      DN.img = mk("image", { x: 0, y: 0, width: map.w, height: map.h, preserveAspectRatio: "none", "pointer-events": "none" });
+      svg.appendChild(DN.img);
+      DN.sun = mk("g", { "pointer-events": "none" });
+      DN.sun.appendChild(mk("circle", { "class": "sunglow", fill: "url(#dnD)" })); DN.sun.appendChild(mk("circle", { "class": "suncore", fill: "#fff7b0" }));
+      var gl = mk("g", { "class": "dnlights", "pointer-events": "none" }), seen = {};
+      info.states.forEach(function (st) {
+        (st.places || []).forEach(function (p, i) {
+          var key = p[1].toFixed(1) + "," + p[2].toFixed(1); if (seen[key]) return; seen[key] = 1;
+          var h = 0; for (var k = 0; k < p[0].length; k++) h = (h * 31 + p[0].charCodeAt(k)) % 997;
+          var b = i === 0 ? 1 : 0.45 + (h % 50) / 100, xy = toXY(p[1], p[2]);
+          var g = mk("g", { transform: "translate(" + xy[0].toFixed(2) + " " + xy[1].toFixed(2) + ")" });
+          var glow = mk("circle", { fill: "url(#dnN)" }), core = mk("circle", { fill: "#fff" });
+          glow.style.animationDuration = (1.4 + (h % 30) / 10) + "s"; glow.style.animationDelay = "-" + ((h % 40) / 10) + "s";
+          g.appendChild(glow); g.appendChild(core); gl.appendChild(g);
+          DN.cities.push({ lat: p[1], lon: p[2], b: b, g: g, glow: glow, core: core, night: null });
+        });
+      });
+      svg.appendChild(gl); svg.appendChild(DN.sun);
+      DN.cv = document.createElement("canvas"); DN.cv.width = 540; DN.cv.height = Math.round(540 * map.h / map.w);
+      DN.cv2 = document.createElement("canvas"); DN.cv2.width = DN.cv.width; DN.cv2.height = DN.cv.height;
+      DN.dimg = mk("image", { x: 0, y: 0, width: map.w, height: map.h, preserveAspectRatio: "none", "pointer-events": "none" });
+      svg.insertBefore(DN.dimg, svg.firstChild.nextSibling);          // right above the ocean plate, below all land
+      DN.ready = true; DN.rescale(); DN.update();
+      var sl = $("#dnSlide"), lv = $("#dnLive"), tg = $("#dnToggle"), pend = false;
+      sl.addEventListener("input", function () {
+        DN.off = +sl.value; if (pend) return; pend = true;
+        requestAnimationFrame(function () { pend = false; DN.update(); });
+      });
+      lv.addEventListener("click", function () { DN.off = 0; sl.value = 0; DN.update(); });
+      tg.addEventListener("click", function () {
+        DN.on = !DN.on; tg.setAttribute("aria-pressed", DN.on); tg.textContent = DN.on ? "Night: on" : "Night: off";
+        [DN.img, DN.dimg, gl, DN.sun].forEach(function (e) { e.style.display = DN.on ? "" : "none"; });
+      });
+      setInterval(function () { if (DN.off === 0) DN.update(); }, 30000);
+    },
+    rescale: function () {
+      var f = Math.min(2.8, 1 + 0.42 * Math.log(Math.max(1, cam.k / k0)) / Math.LN2);
+      DN.cities.forEach(function (c) {
+        c.glow.setAttribute("r", px((2.6 + 3.4 * c.b) * f)); c.core.setAttribute("r", px((0.8 + 0.8 * c.b) * Math.min(f, 1.6)));
+      });
+      var m = DN.sun.childNodes; m[0].setAttribute("r", px(22)); m[1].setAttribute("r", px(5));
+    },
+    update: function () {
+      var t = Date.now() + DN.off * 60000, s = DN.sunPos(t), cv = DN.cv, W = cv.width, Hh = cv.height;
+      var ctx = cv.getContext("2d"), im = ctx.createImageData(W, Hh), d = im.data, r = Math.PI / 180;
+      var cv2 = DN.cv2, ctx2 = cv2.getContext("2d"), im2 = ctx2.createImageData(W, Hh), d2 = im2.data;
+      var sinD = Math.sin(s.dec), cosD = Math.cos(s.dec), cosH = [], j, i;
+      for (i = 0; i < W; i++) cosH.push(Math.cos((toLatLon(0, 0)[1] + (i + .5) / W * 360 - s.lon) * r));
+      for (j = 0; j < Hh; j++) {
+        var la = toLatLon(0, (j + .5) / Hh * map.h)[0] * r, sp = Math.sin(la) * sinD, cp = Math.cos(la) * cosD;
+        for (i = 0; i < W; i++) {
+          var a = Math.asin(Math.max(-1, Math.min(1, sp + cp * cosH[i]))) / r;       // sun altitude, degrees
+          var u = Math.max(0, Math.min(1, (4 - a) / 22)), e = u * u * (3 - 2 * u), o = (j * W + i) * 4;   // 4 deg -> 0, -18 deg -> 1
+          var tw = Math.max(0, 1 - e * 1.6);                                          // magenta glow on the twilight edge
+          d[o] = 10 + 110 * tw * e; d[o + 1] = 4 + 10 * tw * e; d[o + 2] = 44 + 60 * tw * e; d[o + 3] = 140 * Math.pow(e, .9);
+          var k = Math.max(0, Math.min(1, a / 55)), mx = Math.max(0, Math.min(1, a / 25));   // daylight: warm at low sun, cool cyan high up
+          d2[o] = 255 - 145 * mx; d2[o + 1] = 130 + 85 * mx; d2[o + 2] = 100 + 155 * mx; d2[o + 3] = 85 * Math.pow(k, .6);
+        }
+      }
+      ctx.putImageData(im, 0, 0); DN.img.setAttribute("href", cv.toDataURL());
+      ctx2.putImageData(im2, 0, 0); DN.dimg.setAttribute("href", cv2.toDataURL());
+      var sx = toXY(s.dec / r, s.lon); DN.sun.setAttribute("transform", "translate(" + sx[0].toFixed(2) + " " + sx[1].toFixed(2) + ")");
+      DN.cities.forEach(function (c) {
+        var a = DN.alt(s, c.lat, c.lon), night = a < 1, deep = Math.max(0, Math.min(1, (2 - a) / 20));
+        if (night !== c.night) {
+          c.night = night; c.glow.setAttribute("fill", night ? "url(#dnN)" : "url(#dnD)");
+          c.glow.setAttribute("class", night ? "fl" : ""); c.core.setAttribute("fill", night ? "#fff0c0" : "#ffffff");
+        }
+        c.g.style.opacity = night ? (0.22 + 0.6 * deep) * (0.35 + 0.65 * c.b) : 0.3 + 0.32 * Math.min(1, a / 45);   // deeper night = brighter lights
+      });
+      var u = new Date(t), p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+      $("#dnTime").textContent = "UTC " + p2(u.getUTCHours()) + ":" + p2(u.getUTCMinutes()) + (DN.off ? "  " + (DN.off > 0 ? "+" : "-") + Math.abs(Math.round(DN.off / 60 * 10) / 10) + "h" : "  LIVE");
+      $("#dnSun").textContent = "Sun over " + spotText(s.dec / r, s.lon);
+    }
+  };
 
   /* ====================== selection ====================== */
   function clearTint() {
@@ -1079,6 +1220,23 @@
     });
   }
   init();
+})();
+</script>
+<script>
+(function () {
+  var dock = document.getElementById("dock");
+  function chip(label, onclick) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = label;
+    b.setAttribute("aria-pressed", "true"); b.addEventListener("click", onclick); dock.appendChild(b); return b;
+  }
+  [["Title", ".brand"], ["Time", "#dn"], ["Layers", "#layerBox"], ["Zoom", "#zoomctl"]].forEach(function (it) {
+    var el = document.querySelector(it[1]); if (!el) return;
+    var b = chip(it[0], function () { b.setAttribute("aria-pressed", String(!el.classList.toggle("x-closed"))); });
+  });
+  var pt = document.getElementById("panelToggle");
+  var pb = chip("Panel", function () { pt.click(); });
+  function sync() { pb.setAttribute("aria-pressed", String(!document.body.classList.contains("panel-off"))); }
+  new MutationObserver(sync).observe(document.body, { attributes: true, attributeFilter: ["class"] }); sync();
 })();
 </script>
 </body>
